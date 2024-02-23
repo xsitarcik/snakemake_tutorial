@@ -1,0 +1,49 @@
+
+# Load config file. It is also possible to define config from the command line
+configfile: "config/config.yaml"
+# now we have access to the config object (see the file)
+
+# The first rule is the target rule. Commonly named as `all`
+rule all:
+    # as inputs specify all the files that you want to produce.
+    # You cant use wildcards here as there will be no output.
+    # The only dynamic part in our workflow is sample
+    # *for simplicity* we here declare a list of samples
+    # although in practice it is not feasible (more on that later)
+    input:
+        # we use expand function to generate all possible combinations of samples and outputs
+        expand("results/trimmed/{sample}_R1.fastq.gz", sample=["test1", "test2"]),
+
+rule subsample_reads:
+    input:
+        r1="test/fastqs/{sample}_R1.fastq.gz",
+        r2="test/fastqs/{sample}_R2.fastq.gz",
+    output:
+        r1="results/subsampled/{sample}_R1.fastq.gz",
+        r2="results/subsampled/{sample}_R2.fastq.gz",
+    params:
+        n_reads=config.get("subsample_reads_to_quantity", 1000),
+    log:
+        "logs/subsampling/{sample}.log",
+    conda: "envs/seqtk.yaml",
+    shell:
+        "("
+        " seqtk sample {input.r1} {params.n_reads} | pigz > {output.r1}"
+        " && seqtk sample {input.r2} {params.n_reads} | pigz > {output.r2}"
+        ") 2> {log}"
+
+rule trim_reads:
+    input:
+        r1="results/subsampled/{sample}_R1.fastq.gz",
+        r2="results/subsampled/{sample}_R2.fastq.gz",
+    output:
+        r1="results/trimmed/{sample}_R1.fastq.gz",
+        r2="results/trimmed/{sample}_R2.fastq.gz",
+        qc="results/trimmed/{sample}.qc.txt",
+    params:
+        extra=config.get("cutadapt_params", ""),
+    log: "logs/cutadapt/{sample}.log",
+    conda: "envs/cutadapt.yaml"
+    shell:
+        "cutadapt --output {output.r1} --paired-output {output.r2} {input.r1} {input.r2} > {output.qc} 2> {log}"
+

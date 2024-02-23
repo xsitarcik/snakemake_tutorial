@@ -1,0 +1,46 @@
+
+# Load config file. It is also possible to define config from the command line
+configfile: "config/config.yaml"
+# now we have access to the config object (see the file)
+
+
+# First, we want to subsample reads using seqtk
+# We write rules in a dynamic fashion - using "wildcards"
+# Wildcards are placeholders for values that are inferred from the output
+rule subsample_reads:
+    input:
+        r1="test/fastqs/{sample}_R1.fastq.gz", # "sample" is a wildcard. It is inferred from output
+        r2="test/fastqs/{sample}_R2.fastq.gz",
+    output:
+        r1="results/subsampled/{sample}_R1.fastq.gz",
+        r2="results/subsampled/{sample}_R2.fastq.gz",
+    params:
+        n_reads=config.get("subsample_reads_to_quantity", 1000), # value is not hardcoded but taken from config file - for user it is enough to modify just the config
+        # we use get method to get the value from config file and handle missing value - we provide default 1000
+    log:
+        "logs/subsampling/{sample}.log",
+    conda: "envs/seqtk.yaml", # we want to use conda environment for this rule. Snakemake will manage it for us.
+    shell: # this declares how to produce the output from inputs. There are other options like `run` to run python directly, `script` to run a script, `wrapper` to use a wrapper, ... etc.
+        # here we access values from input, output, params ... directives
+        "("
+        " seqtk sample {input.r1} {params.n_reads} | pigz > {output.r1}"
+        " && seqtk sample {input.r2} {params.n_reads} | pigz > {output.r2}"
+        ") 2> {log}"
+        # We can easily use multi-line shell commands with double quotes
+
+
+# Now we want to trim the subsampled reads
+rule trim_reads:
+    input:
+        r1="results/subsampled/{sample}_R1.fastq.gz", # these are the outputs of the previous rule
+        r2="results/subsampled/{sample}_R2.fastq.gz",
+    output:
+        r1="results/trimmed/{sample}_R1.fastq.gz",
+        r2="results/trimmed/{sample}_R2.fastq.gz",
+        qc="results/trimmed/{sample}.qc.txt",
+    params:
+        extra=config.get("cutadapt_params", ""),
+    log: "logs/cutadapt/{sample}.log",
+    conda: "envs/cutadapt.yaml"
+    shell:
+        "cutadapt --output {output.r1} --paired-output {output.r2} {input.r1} {input.r2} > {output.qc} 2> {log}"

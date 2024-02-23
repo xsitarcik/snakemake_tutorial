@@ -1,0 +1,6 @@
+
+subsample_reads_to_quantity: 5000
+cutadapt_params: "--minimum-length 1 -q 20"
+
+# Config files provide easy configuration for users
+# The whole config is loaded in snakemake and can be accessed using `config` which is a python dictionary
